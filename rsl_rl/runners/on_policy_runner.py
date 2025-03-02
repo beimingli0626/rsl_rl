@@ -37,7 +37,7 @@ class OnPolicyRunner:
             num_critic_obs = num_obs
         actor_critic_class = eval(self.policy_cfg.pop("class_name"))  # ActorCritic
         actor_critic: ActorCritic | ActorCriticRecurrent = actor_critic_class(
-            num_obs, num_critic_obs, self.env.num_actions, **self.policy_cfg
+            num_obs, num_critic_obs, self.env.num_actions * self.env.num_left_agents, **self.policy_cfg
         ).to(self.device)
 
         # resolve dimension of rnd gated state
@@ -74,11 +74,11 @@ class OnPolicyRunner:
             self.critic_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
         # init storage and model
         self.alg.init_storage(
-            self.env.num_envs,
+            self.env.num_envs * 2,
             self.num_steps_per_env,
             [num_obs],
             [num_critic_obs],
-            [self.env.num_actions],
+            [self.env.num_actions * self.env.num_left_agents],
         )
 
         # Log
@@ -179,12 +179,12 @@ class OnPolicyRunner:
                             cur_ireward_sum += intrinsic_rewards  # type: ignore
                             cur_reward_sum += rewards + intrinsic_rewards
                         else:
-                            cur_reward_sum += rewards
+                            cur_reward_sum += rewards[::2]
                         # Update episode length
                         cur_episode_length += 1
                         # Clear data for completed episodes
                         # -- common
-                        new_ids = (dones > 0).nonzero(as_tuple=False)
+                        new_ids = (dones[::2] > 0).nonzero(as_tuple=False)
                         rewbuffer.extend(cur_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
                         lenbuffer.extend(cur_episode_length[new_ids][:, 0].cpu().numpy().tolist())
                         cur_reward_sum[new_ids] = 0
